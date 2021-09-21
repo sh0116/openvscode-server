@@ -51,11 +51,9 @@ export async function activate(context: vscode.ExtensionContext) {
 		output.appendLine(`[${new Date().toLocaleString()}] ${value}`);
 	}
 
-	log(`Running in remote: ${vscode.env.remoteName}, extensionKind: ${context.extension.extensionKind}`);
+	log('Registering the auth provider');
+	registerAuth(context, log);
 
-	registerAuth(context);
-
-	log('Registering the URI handler');
 	context.subscriptions.push(vscode.window.registerUriHandler({
 		handleUri: async (uri): Promise<void> => {
 			if (uri.path === authCompletePath) {
