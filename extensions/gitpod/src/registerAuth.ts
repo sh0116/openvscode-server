@@ -6,24 +6,23 @@
 
 import ClientOAuth2 from 'client-oauth2';
 import * as vscode from 'vscode';
-import { GitpodExtensionContext } from 'gitpod-shared';
 
 const authCompletePath = '/auth-complete';
+const scopes: string[] = [
+	'function:accessCodeSyncStorage'
+];
 
-function registerAuth(context: GitpodExtensionContext): void {
-	async function resolveAuthenticationSession(data: any, resolveUser: any): Promise<vscode.AuthenticationSession> {
-		const needsUserInfo = !data.account;
-		const userInfo = needsUserInfo ? await resolveUser(data) : undefined;
+function registerAuth(context: vscode.ExtensionContext): void {
+	async function resolveAuthenticationSession(accessToken: string): Promise<vscode.AuthenticationSession> {
+		// Todo: use a real authentication session with @gitpod/protocol
 		return {
-			id: data.id,
+			id: 'gitpod.user',
 			account: {
-				label: data.account
-					? data.account.label || data.account.displayName!
-					: userInfo!.accountName,
-				id: data.account?.id ?? userInfo!.id
+				label: 'GitPod User',
+				id: 'gitpod.user'
 			},
-			scopes: data.scopes,
-			accessToken: data.accessToken
+			scopes: scopes,
+			accessToken: accessToken
 		};
 	}
 
@@ -31,72 +30,55 @@ function registerAuth(context: GitpodExtensionContext): void {
 		return !scopes || scopes.every(scope => session.scopes.includes(scope));
 	}
 
+	async function createSession(scopes: string[]): Promise<vscode.AuthenticationSession> {
+		const baseURL = 'https://server-vscode-ouath2.staging.gitpod-dev.com';
+
+		const callbackUri = `${vscode.env.uriScheme}://gitpod.gitpod-desktop${authCompletePath}`;
+
+		const gitpodAuth = new ClientOAuth2({
+			clientId: 'vscode',
+			accessTokenUri: `${baseURL}/api/oauth/token`,
+			authorizationUri: `${baseURL}/api/oauth/authorize`,
+			redirectUri: callbackUri,
+			scopes: scopes,
+		});
+
+		const timeoutPromise = new Promise((_: (value: vscode.AuthenticationSession) => void, reject) => {
+			const wait = setTimeout(() => {
+				clearTimeout(wait);
+				reject('Login timed out.');
+			}, 1000 * 60 * 5); // 5 minutes
+		});
+
+		// Open the authorization URL in the default browser
+		const authURI = vscode.Uri.parse(gitpodAuth.code.getUri());
+		await vscode.env.openExternal(authURI);
+		return Promise.race([timeoutPromise, resolveAuthenticationSession('token')]);
+	}
+
 	//#endregion
 
 	//#region gitpod auth
-	context.pendingActivate.push((async () => {
-		const sessions: vscode.AuthenticationSession[] = [];
-		const onDidChangeSessionsEmitter = new vscode.EventEmitter<vscode.AuthenticationProviderAuthenticationSessionsChangeEvent>();
-		try {
-			const resolveGitpodUser = async () => {
-				const owner = await context.owner;
-				return {
-					id: owner.id,
-					accountName: owner.name,
-				};
-			};
-			if (vscode.env.uiKind === vscode.UIKind.Web) {
-				const value = await context.secrets.get(`${vscode.env.uriScheme}-gitpod.login`);
-				if (value) {
-					const sessionData = JSON.parse(value);
-					if (sessionData.length) {
-						const session = await resolveAuthenticationSession(sessionData[0], resolveGitpodUser);
-						sessions.push(session);
-					}
-				}
-			} else {
-				const scopes = [
-					'function:accessCodeSyncStorage'
-				];
-				const baseURL = 'https://gitpod.io';
+	const onDidChangeSessionsEmitter = new vscode.EventEmitter<vscode.AuthenticationProviderAuthenticationSessionsChangeEvent>();
 
-				const callbackUri = `${vscode.env.uriScheme}://gitpod.gitpod-desktop${authCompletePath}`;
-
-				const gitpodAuth = new ClientOAuth2({
-					clientId: 'gplctl-1.0',
-					clientSecret: 'gplctl-1.0-secret',
-					accessTokenUri: `${baseURL}/api/oauth/token`,
-					authorizationUri: `${baseURL}/api/oauth/authorize`,
-					redirectUri: callbackUri,
-					scopes: scopes,
-				});
-
-				// Open the authorization URL in the default browser
-				await vscode.env.openExternal(vscode.Uri.parse(gitpodAuth.code.getUri()));
-
+	context.subscriptions.push(vscode.authentication.registerAuthenticationProvider('gitpod', 'Gitpod', {
+		onDidChangeSessions: onDidChangeSessionsEmitter.event,
+		getSessions: (scopes: string[]) => {
+			const sessions: vscode.AuthenticationSession[] = [];
+			if (!scopes) {
+				return Promise.resolve(sessions);
 			}
-		} catch (e) {
-			console.error('Failed to restore Gitpod session:', e);
-		}
-		context.subscriptions.push(onDidChangeSessionsEmitter);
-		context.subscriptions.push(vscode.authentication.registerAuthenticationProvider('gitpod', 'Gitpod', {
-			onDidChangeSessions: onDidChangeSessionsEmitter.event,
-			getSessions: scopes => {
-				if (!scopes) {
-					return Promise.resolve(sessions);
-				}
-				return Promise.resolve(sessions.filter(session => hasScopes(session, scopes)));
-			},
-			createSession: async () => {
-				// Todo: implement logging in
-				throw new Error('not supported');
-			},
-			removeSession: async () => {
-				// Todo: implement logging out
-				throw new Error('not supported');
-			},
-		}, { supportsMultipleAccounts: false }));
-	})());
+			return Promise.resolve(sessions.filter(session => hasScopes(session, scopes)));
+		},
+		createSession: async (scopes: string[]) => {
+			context.subscriptions.push(onDidChangeSessionsEmitter);
+			return createSession(scopes);
+		},
+		removeSession: async () => {
+			// Todo: implement logging out
+			throw new Error('not supported');
+		},
+	}, { supportsMultipleAccounts: false }));
 	//#endregion gitpod auth
 }
 

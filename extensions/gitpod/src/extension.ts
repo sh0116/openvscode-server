@@ -53,48 +53,44 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	log(`Running in remote: ${vscode.env.remoteName}, extensionKind: ${context.extension.extensionKind}`);
 
-	// Run code only in a remote environment (SSH, GitPod, OpenVSCodeServer)
-	if (context.extension.extensionKind === vscode.ExtensionKind.Workspace && vscode.env.remoteName !== undefined) {
+	registerAuth(context);
 
-		registerAuth(context);
-
-		log('Registering the URI handler');
-		context.subscriptions.push(vscode.window.registerUriHandler({
-			handleUri: async (uri): Promise<void> => {
-				if (uri.path === authCompletePath) {
-					// Get the token from the URI
-					const token = new URLSearchParams(uri.query).get('token');
-					if (token !== null) {
-						// Store the token
-						await context.secrets.store('gitpod.token', token);
-						log('auth completed');
-					} else {
-						vscode.window.showErrorMessage('Auth failed: missing token');
-					}
-					return;
+	log('Registering the URI handler');
+	context.subscriptions.push(vscode.window.registerUriHandler({
+		handleUri: async (uri): Promise<void> => {
+			if (uri.path === authCompletePath) {
+				// Get the token from the URI
+				const token = new URLSearchParams(uri.query).get('token');
+				if (token !== null) {
+					// Store the token
+					await context.secrets.store('gitpod.token', token);
+					log('auth completed');
+				} else {
+					vscode.window.showErrorMessage('Auth failed: missing token');
 				}
+				return;
 			}
-		}));
+		}
+	}));
 
-		log('Registering the auth command');
-		context.subscriptions.push(vscode.commands.registerCommand('gitpod.api.auth', async () => {
-			log('Executing auth command');
-			context.subscriptions.push(
-				vscode.commands.registerCommand(`gitpod.api.signin`, async () => {
-					// Get an externally addressable callback URI for the handler that the authentication provider can use
-					const callbackUri = await vscode.env.asExternalUri(
-						vscode.Uri.parse(`${vscode.env.uriScheme}://gitpod/auth-complete`)
-					);
+	log('Registering the auth command');
+	context.subscriptions.push(vscode.commands.registerCommand('gitpod.api.auth', async () => {
+		log('Executing auth command');
+		context.subscriptions.push(
+			vscode.commands.registerCommand(`gitpod.api.signin`, async () => {
+				// Get an externally addressable callback URI for the handler that the authentication provider can use
+				const callbackUri = await vscode.env.asExternalUri(
+					vscode.Uri.parse(`${vscode.env.uriScheme}://gitpod/auth-complete`)
+				);
 
-					vscode.env.clipboard.writeText(callbackUri.toString());
-					await vscode.window.showInformationMessage(
-						'Open the URI copied to the clipboard in a browser window to authorize.'
-					);
-				})
-			);
-		}));
-		return;
-	}
+				vscode.env.clipboard.writeText(callbackUri.toString());
+				await vscode.window.showInformationMessage(
+					'Open the URI copied to the clipboard in a browser window to authorize.'
+				);
+			})
+		);
+	}));
+
 
 	// TODO(ak) commands to show logs and stop local apps
 	// TODO(ak) auto stop local apps if not used for 3 hours
