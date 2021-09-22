@@ -51,7 +51,6 @@ export async function activate(context: vscode.ExtensionContext) {
 		output.appendLine(`[${new Date().toLocaleString()}] ${value}`);
 	}
 
-	log('Registering the auth provider');
 	registerAuth(context, log);
 
 	context.subscriptions.push(vscode.window.registerUriHandler({
@@ -70,25 +69,6 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 		}
 	}));
-
-	log('Registering the auth command');
-	context.subscriptions.push(vscode.commands.registerCommand('gitpod.api.auth', async () => {
-		log('Executing auth command');
-		context.subscriptions.push(
-			vscode.commands.registerCommand(`gitpod.api.signin`, async () => {
-				// Get an externally addressable callback URI for the handler that the authentication provider can use
-				const callbackUri = await vscode.env.asExternalUri(
-					vscode.Uri.parse(`${vscode.env.uriScheme}://gitpod/auth-complete`)
-				);
-
-				vscode.env.clipboard.writeText(callbackUri.toString());
-				await vscode.window.showInformationMessage(
-					'Open the URI copied to the clipboard in a browser window to authorize.'
-				);
-			})
-		);
-	}));
-
 
 	// TODO(ak) commands to show logs and stop local apps
 	// TODO(ak) auto stop local apps if not used for 3 hours

@@ -121,6 +121,7 @@ function registerAuth(context: vscode.ExtensionContext, logger: any): void {
 	}
 
 	async function createSession(scopes: string[]): Promise<vscode.AuthenticationSession> {
+		logger('Creating session...');
 		const baseURL = 'https://server-vscode-ouath2.staging.gitpod-dev.com';
 
 		const callbackUri = `${vscode.env.uriScheme}://gitpod.gitpod-desktop${authCompletePath}`;
@@ -142,8 +143,10 @@ function registerAuth(context: vscode.ExtensionContext, logger: any): void {
 
 		// Open the authorization URL in the default browser
 		const authURI = vscode.Uri.parse(gitpodAuth.code.getUri());
+		logger(`Opening browser at ${authURI.toString()}`);
 		await vscode.env.openExternal(authURI);
 		const authPromise = promiseFromEvent(uriHandler.event, getToken(scopes));
+		logger(authPromise);
 		return Promise.race([timeoutPromise, resolveAuthenticationSession(scopes, 'token')]);
 	}
 
@@ -152,6 +155,7 @@ function registerAuth(context: vscode.ExtensionContext, logger: any): void {
 	//#region gitpod auth
 	const onDidChangeSessionsEmitter = new vscode.EventEmitter<vscode.AuthenticationProviderAuthenticationSessionsChangeEvent>();
 
+	logger('Registering authentication provider...');
 	context.subscriptions.push(vscode.authentication.registerAuthenticationProvider('gitpod', 'Gitpod', {
 		onDidChangeSessions: onDidChangeSessionsEmitter.event,
 		getSessions: (scopes: string[]) => {
