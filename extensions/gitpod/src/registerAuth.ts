@@ -5,8 +5,9 @@
 /// <reference path='../../../src/vs/vscode.d.ts'/>
 
 import ClientOAuth2 from 'client-oauth2';
+import crypto from 'crypto';
 import * as vscode from 'vscode';
-import { URLSearchParams } from 'url';
+import { URLSearchParams, URL } from 'url';
 
 import { GitpodClient, GitpodServer, GitpodServiceImpl } from '@gitpod/gitpod-protocol/lib/gitpod-service';
 import { JsonRpcProxyFactory } from '@gitpod/gitpod-protocol/lib/messaging/proxy-factory';
@@ -94,6 +95,16 @@ export function promiseFromEvent<T, U>(
 	};
 }
 
+/**
+	Generates a code verifier and code challenge for the OAuth2 flow.
+	@returns a tuple of the code verifier and code challenge
+*/
+function generatePKCE(): { codeVerifier: string, codeChallenge: string } {
+	const codeVerifier = crypto.randomBytes(32).toString('base64');
+	const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64');
+	return { codeVerifier, codeChallenge };
+}
+
 export async function resolveAuthenticationSession(scopes: readonly string[], accessToken: string): Promise<vscode.AuthenticationSession> {
 	const factory = new JsonRpcProxyFactory<GitpodServer>();
 	const gitpodService: GitpodConnection = new GitpodServiceImpl<GitpodClient, GitpodServer>(factory.createProxy()) as any;
@@ -177,6 +188,15 @@ function registerAuth(context: vscode.ExtensionContext, logger: any): void {
 			scopes: scopes,
 		});
 
+		const redirectUri = new URL(gitpodAuth.code.getUri());
+		const secureQuery = new URLSearchParams(redirectUri.search);
+
+		const codePair = generatePKCE();
+		secureQuery.set('code_challenge', codePair.codeChallenge);
+		secureQuery.set('code_challenge_method', 'S256');
+
+		redirectUri.search = secureQuery.toString();
+
 		const timeoutPromise = new Promise((_: (value: vscode.AuthenticationSession) => void, reject): void => {
 			const wait = setTimeout(() => {
 				clearTimeout(wait);
@@ -185,8 +205,8 @@ function registerAuth(context: vscode.ExtensionContext, logger: any): void {
 		});
 
 		// Open the authorization URL in the default browser
-		const authURI = vscode.Uri.parse(gitpodAuth.code.getUri());
-		logger(`Opening browser at ${authURI.toString()}`);
+		const authURI = vscode.Uri.parse(redirectUri.toString());
+		logger(`Opening browser at ${redirectUri.toString()}`);
 		await vscode.env.openExternal(authURI);
 		const authPromise = promiseFromEvent(uriHandler.event, getToken(scopes));
 		logger(authPromise);
