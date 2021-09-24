@@ -8,7 +8,6 @@ import ClientOAuth2 from 'client-oauth2';
 import crypto from 'crypto';
 import * as vscode from 'vscode';
 import { URLSearchParams, URL } from 'url';
-import pEvent from 'p-event';
 
 import { GitpodClient, GitpodServer, GitpodServiceImpl } from '@gitpod/gitpod-protocol/lib/gitpod-service';
 import { JsonRpcProxyFactory } from '@gitpod/gitpod-protocol/lib/messaging/proxy-factory';
@@ -55,7 +54,7 @@ const passthrough = (value: any, resolve: (value?: any) => void) => resolve(valu
  * @param adapter controls resolution of the returned promise
  * @returns a promise that resolves or rejects as specified by the adapter
  */
-export function promiseFromEvent<T, U>(
+function promiseFromEvent<T, U>(
 	event: vscode.Event<T>,
 	adapter: PromiseAdapter<T, U> = passthrough): { promise: Promise<U>, cancel: vscode.EventEmitter<void> } {
 	let subscription: vscode.Disposable;
@@ -159,30 +158,24 @@ function registerAuth(context: vscode.ExtensionContext, logger: any): void {
 	 */
 	const waitForAuthenticationSession = async (): Promise<vscode.AuthenticationSession> => {
 		logger('Waiting for the onchange event');
+
 		// Wait until a session is added to the context's secret store
-		// @ts-ignore
-		await pEvent(context.secrets.onDidChange, 'gitpod.authSession');
+		const authPromise = promiseFromEvent(context.secrets.onDidChange, (changeEvent: vscode.SecretStorageChangeEvent, resolve, reject): void => {
+			if (changeEvent.key !== 'gitpod.authSession') {
+				reject('Cancelled');
+			} else {
+				resolve(changeEvent.key);
+			}
+		});
+		const data = await authPromise.promise;
+
+		logger(data);
+
 		logger('Retrieving the session');
 
 		const session: vscode.AuthenticationSession = JSON.parse(await context.secrets.get('gitpod.authSession') || '');
 		return session;
 	};
-
-	const getToken: (scopes: string[]) => PromiseAdapter<vscode.Uri, string> = () => async (uri, resolve, reject) => {
-		if (uri.path === authCompletePath) {
-			// Get the token from the URI
-			const token = new URLSearchParams(uri.query).get('token');
-			if (token !== null) {
-				// Store the token
-				await context.secrets.store('gitpod.token', token);
-				resolve(token);
-			} else {
-				reject('Auth failed: missing token');
-			}
-			return;
-		}
-	};
-	logger(getToken);
 
 	async function createSession(_scopes: string[]): Promise<vscode.AuthenticationSession> {
 		logger('Creating session...');
