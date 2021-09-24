@@ -8,6 +8,7 @@ import ClientOAuth2 from 'client-oauth2';
 import crypto from 'crypto';
 import * as vscode from 'vscode';
 import { URLSearchParams, URL } from 'url';
+import pEvent from 'p-event';
 
 import { GitpodClient, GitpodServer, GitpodServiceImpl } from '@gitpod/gitpod-protocol/lib/gitpod-service';
 import { JsonRpcProxyFactory } from '@gitpod/gitpod-protocol/lib/messaging/proxy-factory';
@@ -18,7 +19,7 @@ import { ConsoleLogger, listen as doListen } from 'vscode-ws-jsonrpc';
 const authCompletePath = '/auth-complete';
 const baseURL = 'https://server-vscode-ouath2.staging.gitpod-dev.com';
 
-const scopes: string[] = [
+export const scopes: string[] = [
 	'function:accessCodeSyncStorage'
 ];
 
@@ -27,17 +28,6 @@ type Union<Tuple extends any[], Union = never> = Tuple[number] | Union;
 export type GitpodConnection = Omit<GitpodServiceImpl<GitpodClient, GitpodServer>, 'server'> & {
 	server: Pick<GitpodServer, Union<UsedGitpodFunction>>
 };
-
-class UriEventHandler extends vscode.EventEmitter<vscode.Uri> implements vscode.UriHandler {
-	constructor(private readonly Logger: any) {
-		super();
-	}
-
-	public handleUri(uri: vscode.Uri) {
-		this.Logger('Handling URI...');
-		this.fire(uri);
-	}
-}
 
 export interface PromiseAdapter<T, U> {
 	(
@@ -105,6 +95,12 @@ function generatePKCE(): { codeVerifier: string, codeChallenge: string } {
 	return { codeVerifier, codeChallenge };
 }
 
+/**
+ * Returns a promise that resolves with the current authentication session of the provided access token. This includes the token itself, the scopes, the user's ID and name.
+ * @param accessToken the access token used to authenticate the Gitpod WS connection
+ * @param scopes the scopes the authentication session must have
+ * @returns a promise that resolves with the authentication session
+ */
 export async function resolveAuthenticationSession(scopes: readonly string[], accessToken: string): Promise<vscode.AuthenticationSession> {
 	const factory = new JsonRpcProxyFactory<GitpodServer>();
 	const gitpodService: GitpodConnection = new GitpodServiceImpl<GitpodClient, GitpodServer>(factory.createProxy()) as any;
@@ -157,8 +153,20 @@ function hasScopes(session: vscode.AuthenticationSession, scopes?: readonly stri
 
 function registerAuth(context: vscode.ExtensionContext, logger: any): void {
 
-	const uriHandler = new UriEventHandler(logger);
-	vscode.window.registerUriHandler(uriHandler);
+	/**
+	 * Returns a promise which waits until the secret store `gitpod.authSession` item changes.
+	 * @returns a promise that resolves with the authentication session
+	 */
+	const waitForAuthenticationSession = async (): Promise<vscode.AuthenticationSession> => {
+		logger('Waiting for the onchange event');
+		// Wait until a session is added to the context's secret store
+		// @ts-ignore
+		await pEvent(context.secrets.onDidChange, 'gitpod.authSession');
+		logger('Retrieving the session');
+
+		const session: vscode.AuthenticationSession = JSON.parse(await context.secrets.get('gitpod.authSession') || '');
+		return session;
+	};
 
 	const getToken: (scopes: string[]) => PromiseAdapter<vscode.Uri, string> = () => async (uri, resolve, reject) => {
 		if (uri.path === authCompletePath) {
@@ -174,6 +182,7 @@ function registerAuth(context: vscode.ExtensionContext, logger: any): void {
 			return;
 		}
 	};
+	logger(getToken);
 
 	async function createSession(_scopes: string[]): Promise<vscode.AuthenticationSession> {
 		logger('Creating session...');
@@ -208,16 +217,14 @@ function registerAuth(context: vscode.ExtensionContext, logger: any): void {
 		const authURI = vscode.Uri.parse(redirectUri.toString());
 		logger(`Opening browser at ${redirectUri.toString()}`);
 		await vscode.env.openExternal(authURI);
-		const authPromise = promiseFromEvent(uriHandler.event, getToken(scopes));
-		logger(authPromise);
-		return Promise.race([timeoutPromise, resolveAuthenticationSession(scopes, 'token')]);
+		// @ts-ignore
+		return Promise.race([timeoutPromise, waitForAuthenticationSession]);
 	}
 
 	//#endregion
 
 	//#region gitpod auth
 	const onDidChangeSessionsEmitter = new vscode.EventEmitter<vscode.AuthenticationProviderAuthenticationSessionsChangeEvent>();
-
 	logger('Registering authentication provider...');
 	context.subscriptions.push(vscode.authentication.registerAuthenticationProvider('gitpod', 'Gitpod', {
 		onDidChangeSessions: onDidChangeSessionsEmitter.event,
