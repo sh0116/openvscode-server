@@ -110,7 +110,7 @@ export async function resolveAuthenticationSession(scopes: readonly string[], ac
 			constructor(address: string, protocols?: string | string[]) {
 				super(address, protocols, {
 					headers: {
-						'Origin': 'https://gitpod.io',
+						'Origin': baseURL,
 						'Authorization': `Bearer ${accessToken}`
 					}
 				});
