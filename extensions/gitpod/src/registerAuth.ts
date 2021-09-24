@@ -221,11 +221,12 @@ function registerAuth(context: vscode.ExtensionContext, logger: any): void {
 	logger('Registering authentication provider...');
 	context.subscriptions.push(vscode.authentication.registerAuthenticationProvider('gitpod', 'Gitpod', {
 		onDidChangeSessions: onDidChangeSessionsEmitter.event,
-		getSessions: (scopes: string[]) => {
+		getSessions: async (scopes: string[]) => {
 			const sessions: vscode.AuthenticationSession[] = [];
 			if (!scopes) {
 				return Promise.resolve(sessions);
 			}
+			sessions.push(JSON.parse(await context.secrets.get('gitpod.authSession') || ''));
 			return Promise.resolve(sessions.filter(session => hasScopes(session, scopes)));
 		},
 		createSession: async (scopes: string[]) => {
@@ -235,8 +236,7 @@ function registerAuth(context: vscode.ExtensionContext, logger: any): void {
 			return createSession(scopes);
 		},
 		removeSession: async () => {
-			// Todo: implement logging out
-			throw new Error('not supported');
+			await context.secrets.delete('gitpod.authSession');
 		},
 	}, { supportsMultipleAccounts: false }));
 	//#endregion gitpod auth
