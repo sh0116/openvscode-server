@@ -40,7 +40,7 @@
 		"commands": [
 			{
 				"command": "gitpod.api.auth",
-				"title": "Authenthicate with Gitpod"
+				"title": "Authenticate with Gitpod"
 			}
 		]
 	},
