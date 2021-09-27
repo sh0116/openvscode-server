@@ -31,10 +31,16 @@
 		"onAuthenticationRequest:gitpod"
 	],
 	"contributes": {
+    "authentication": [
+      {
+        "label": "Gitpod",
+        "id": "gitpod"
+      }
+    ],
 		"commands": [
 			{
 				"command": "gitpod.api.auth",
-				"title": "Authenthicate with GitPod"
+				"title": "Authenthicate with Gitpod"
 			}
 		]
 	},
