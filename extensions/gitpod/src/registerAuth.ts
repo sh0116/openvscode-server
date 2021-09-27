@@ -15,6 +15,12 @@ import WebSocket = require('ws');
 import ReconnectingWebSocket from 'reconnecting-websocket';
 import { ConsoleLogger, listen as doListen } from 'vscode-ws-jsonrpc';
 
+
+// @ts-ignore
+import { DisposableStore } from '../../../src/vs/base/common/lifecycle';
+// @ts-ignore
+import { commands, create, ICommand, ICredentialsProvider, IHomeIndicator, ITunnel, ITunnelProvider, IWorkspace, IWorkspaceProvider } from '../../../src/vs/workbench/workbench.web.api';
+
 const authCompletePath = '/auth-complete';
 const baseURL = 'https://server-vscode-ouath2.staging.gitpod-dev.com';
 
@@ -94,6 +100,34 @@ function generatePKCE(): { codeVerifier: string, codeChallenge: string } {
 	return { codeVerifier, codeChallenge };
 }
 
+export function addAuthProvider(): DisposableStore {
+	const subscriptions = new DisposableStore();
+	const syncStoreURL = `${baseURL}/code-sync`;
+
+	subscriptions.add(create(document.body, {
+		productConfiguration: {
+			'configurationSync.store': {
+				url: syncStoreURL,
+				stableUrl: syncStoreURL,
+				insidersUrl: syncStoreURL,
+				canSwitch: true,
+				authenticationProviders: {
+					gitpod: {
+						scopes: ['function:accessCodeSyncStorage']
+					}
+				}
+			}
+		},
+		settingsSyncOptions: {
+			enabled: true,
+			enablementHandler: (_enablement: boolean) => {
+				// TODO(ft): add magic code here
+			}
+		},
+	}));
+	return subscriptions;
+}
+
 /**
  * Returns a promise that resolves with the current authentication session of the provided access token. This includes the token itself, the scopes, the user's ID and name.
  * @param accessToken the access token used to authenticate the Gitpod WS connection
@@ -127,9 +161,10 @@ export async function resolveAuthenticationSession(scopes: readonly string[], ac
 		});
 		webSocket.onerror = console.error;
 		doListen({
+			// @ts-ignore
 			webSocket,
+			logger: new ConsoleLogger(),
 			onConnection: connection => factory.listen(connection),
-			logger: new ConsoleLogger()
 		});
 		return webSocket;
 	})();
