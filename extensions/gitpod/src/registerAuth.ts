@@ -150,7 +150,7 @@ function hasScopes(session: vscode.AuthenticationSession, scopes?: readonly stri
 	return !scopes || scopes.every(scope => session.scopes.includes(scope));
 }
 
-function registerAuth(context: vscode.ExtensionContext, logger: any): void {
+function registerAuth(context: vscode.ExtensionContext, logger: (value: string) => void): void {
 
 	/**
 	 * Returns a promise which waits until the secret store `gitpod.authSession` item changes.
@@ -167,9 +167,9 @@ function registerAuth(context: vscode.ExtensionContext, logger: any): void {
 				resolve(changeEvent.key);
 			}
 		});
-		const data = await authPromise.promise;
+		const data: any = await authPromise.promise;
 
-		logger(data);
+		logger(data.toString());
 
 		logger('Retrieving the session');
 
@@ -239,6 +239,7 @@ function registerAuth(context: vscode.ExtensionContext, logger: any): void {
 			await context.secrets.delete('gitpod.authSession');
 		},
 	}, { supportsMultipleAccounts: false }));
+	logger('Pushed auth');
 	//#endregion gitpod auth
 }
 
