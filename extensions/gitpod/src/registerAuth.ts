@@ -100,6 +100,11 @@ function generatePKCE(): { codeVerifier: string, codeChallenge: string } {
 	return { codeVerifier, codeChallenge };
 }
 
+/**
+ * Adds an authenthication provider as a possible provider for code sync.
+ * It adds some key configuration to the user settings, so that the user can choose the Gitpod provider when deciding what to use with setting sync.
+ * @returns a `DisposableStore`
+ */
 export function addAuthProvider(): DisposableStore {
 	const subscriptions = new DisposableStore();
 	const syncStoreURL = `${baseURL}/code-sync`;
