@@ -14,6 +14,7 @@ import { JsonRpcProxyFactory } from '@gitpod/gitpod-protocol/lib/messaging/proxy
 import WebSocket = require('ws');
 import ReconnectingWebSocket from 'reconnecting-websocket';
 import { ConsoleLogger, listen as doListen } from 'vscode-ws-jsonrpc';
+import { writeFileSync, readFileSync } from 'fs';
 
 const authCompletePath = '/auth-complete';
 const baseURL = 'https://server-vscode-ouath2.staging.gitpod-dev.com';
@@ -96,6 +97,50 @@ function generatePKCE(): { codeVerifier: string, codeChallenge: string } {
 	return { codeVerifier, codeChallenge };
 }
 
+/**
+ * This is a workaround to change the config file although it fails via the native API
+ * @param syncStoreURL the URL VS Code uses as an endpoint for sync
+ */
+export async function manuallyWriteConfig(syncStoreURL: string, remove?: boolean) {
+
+	const homedir = require('os').homedir();
+	let configFile;
+
+	// TODO(ft): Add support for VS Code Insiders
+	if (process.platform === 'win32') {
+		configFile = `${process.env.APPDATA}\\Code\\User\\settings.json`;
+	} else if (process.platform === 'darwin') {
+		configFile = `${homedir}/Library/Application Support/Code/User/settings.json`;
+	} else {
+		configFile = `${homedir}/.config/Code/User/settings.json`;
+	}
+
+	const settingsContents = readFileSync(configFile, 'utf8');
+
+	const jsonContents = JSON.parse(settingsContents);
+	if (remove) {
+		delete jsonContents['configurationSync.store'];
+	} else {
+		jsonContents['configurationSync.store'] = {
+			url: syncStoreURL,
+			stableUrl: syncStoreURL,
+			insidersUrl: syncStoreURL,
+			canSwitch: true,
+			authenticationProviders: {
+				gitpod: {
+					scopes: ['function:accessCodeSyncStorage']
+				}
+			}
+		};
+	}
+
+	try {
+		const data = JSON.stringify(jsonContents, null, 4);
+		writeFileSync(configFile, data, 'utf8');
+	} catch (err) {
+		vscode.window.showErrorMessage(`Error writing file: ${err}`);
+	}
+}
 
 /**
  * Prompts the user to reload VS Code (executes native `workbench.action.reloadWindow`)
@@ -114,7 +159,6 @@ function promptToReload(msg?: string): void {
 /**
  * Adds an authenthication provider as a possible provider for code sync.
  * It adds some key configuration to the user settings, so that the user can choose the Gitpod provider when deciding what to use with setting sync.
- * @returns a `DisposableStore`
  */
 export async function addAuthProviderToSettings(): Promise<void> {
 	const syncStoreURL = `${baseURL}/code-sync`;
