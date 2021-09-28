@@ -184,9 +184,9 @@
     global-tunnel-ng "^2.7.1"
 
 "@gitpod/gitpod-protocol@main":
-  version "0.1.5-main.828"
-  resolved "https://registry.yarnpkg.com/@gitpod/gitpod-protocol/-/gitpod-protocol-0.1.5-main.828.tgz#e0add6fcb3985127badc7abca1a4ee797265455e"
-  integrity sha512-I4Q3cgXNsOrLHkU+n9qDAASfEP+qXiLzlES/lJdAEXSJaXmzHa3+Noyw6ridXgzrA76wOB59cMBvBNSQKSV6Hg==
+  version "0.1.5-main.1518"
+  resolved "https://registry.yarnpkg.com/@gitpod/gitpod-protocol/-/gitpod-protocol-0.1.5-main.1518.tgz#b982884b592c6d28e82cdedee4e613d0d50d4945"
+  integrity sha512-7JZ5Ni8DsvOoarhKJkiZLq1+LwsbGJqeQMps81z0b+AH8JobuANpxpCjloRB8cTxaJy+R+J0CVjdS85n2Owhtw==
   dependencies:
     ajv "^6.5.4"
     analytics-node "^4.0.1"
@@ -194,14 +194,16 @@
     jaeger-client "3.17.2"
     js-yaml "^3.10.0"
     opentracing "^0.14.4"
-    prom-client "^10.2.0"
+    prom-client "^13.2.0"
     random-number-csprng "^1.0.2"
-    reconnecting-websocket "^4.2.0"
+    reconnecting-websocket "^4.4.0"
     reflect-metadata "^0.1.10"
     uuid "^3.3.3"
+    vscode-jsonrpc "^5.0.1"
+    vscode-languageserver-protocol "3.15.3"
     vscode-uri "^1.0.1"
     vscode-ws-jsonrpc "^0.2.0"
-    ws "^5.2.2"
+    ws "^7.4.6"
 
 "@gitpod/local-app-api-grpcweb@main":
   version "0.1.5-main.943"
@@ -1714,11 +1716,6 @@ async-hook-jl@^1.7.6:
   integrity sha512-gFaHkFfSxTjvoxDMYqDuGHlcRyUuamF8s+ZTtJdDzqjws4mCt7v0vuV79/E2Wr2/riMQgtG4/yUtXWs1gZ7JMg==
   dependencies:
     stack-chain "^1.3.7"
-
-async-limiter@~1.0.0:
-  version "1.0.1"
-  resolved "https://registry.yarnpkg.com/async-limiter/-/async-limiter-1.0.1.tgz#dd379e94f0db8310b08291f9d64c3209766617fd"
-  integrity sha512-csOlWGAcRFJaI6m+F2WKdnMKr4HhdhFVBk0H/QbJFMCr+uO2kwohwXQPxw/9OCxp05r5ghVBFSyioixx3gfkNQ==
 
 async-listener@^0.6.0:
   version "0.6.10"
@@ -8540,10 +8537,10 @@ progress@^2.0.0, progress@^2.0.3:
   resolved "https://registry.yarnpkg.com/progress/-/progress-2.0.3.tgz#7e8cf8d8f5b8f239c1bc68beb4eb78567d572ef8"
   integrity sha512-7PiHtLll5LdnKIMw100I+8xJXR5gW2QwWYkT6iJva0bXitZKa/XMrSbdmg3r2Xnaidz9Qumd0VPaMrZlF9V9sA==
 
-prom-client@^10.2.0:
-  version "10.2.3"
-  resolved "https://registry.yarnpkg.com/prom-client/-/prom-client-10.2.3.tgz#a51bf21c239c954a6c5be4b1361fdd380218bb41"
-  integrity sha512-Xboq5+TdUwuQtSSDRZRNnb5NprINlgQN999VqUjZxnLKydUNLeIPx6Eiahg6oJua3XBg2TGnh5Cth1s4I6+r7g==
+prom-client@^13.2.0:
+  version "13.2.0"
+  resolved "https://registry.yarnpkg.com/prom-client/-/prom-client-13.2.0.tgz#99d13357912dd400f8911b77df19f7b328a93e92"
+  integrity sha512-wGr5mlNNdRNzEhRYXgboUU2LxHWIojxscJKmtG3R8f4/KiWqyYgXTLHs0+Ted7tG3zFT7pgHJbtomzZ1L0ARaQ==
   dependencies:
     tdigest "^0.1.1"
 
@@ -8865,7 +8862,7 @@ rechoir@^0.7.0:
   dependencies:
     resolve "^1.9.0"
 
-reconnecting-websocket@^4.2.0:
+reconnecting-websocket@^4.4.0:
   version "4.4.0"
   resolved "https://registry.yarnpkg.com/reconnecting-websocket/-/reconnecting-websocket-4.4.0.tgz#3b0e5b96ef119e78a03135865b8bb0af1b948783"
   integrity sha512-D2E33ceRPga0NvTDhJmphEgJ7FUYF0v4lr1ki0csq06OdlxKfugGzN0dSkxM/NfqCxYELK4KcaTOUOjTV6Dcng==
@@ -10952,6 +10949,19 @@ vscode-jsonrpc@^5.0.0, vscode-jsonrpc@^5.0.1:
   resolved "https://registry.yarnpkg.com/vscode-jsonrpc/-/vscode-jsonrpc-5.0.1.tgz#9bab9c330d89f43fc8c1e8702b5c36e058a01794"
   integrity sha512-JvONPptw3GAQGXlVV2utDcHx0BiY34FupW/kI6mZ5x06ER5DdPG/tXWMVHjTNULF5uKPOUUD0SaXg5QaubJL0A==
 
+vscode-languageserver-protocol@3.15.3:
+  version "3.15.3"
+  resolved "https://registry.yarnpkg.com/vscode-languageserver-protocol/-/vscode-languageserver-protocol-3.15.3.tgz#3fa9a0702d742cf7883cb6182a6212fcd0a1d8bb"
+  integrity sha512-zrMuwHOAQRhjDSnflWdJG+O2ztMWss8GqUUB8dXLR/FPenwkiBNkMIJJYfSN6sgskvsF0rHAoBowNQfbyZnnvw==
+  dependencies:
+    vscode-jsonrpc "^5.0.1"
+    vscode-languageserver-types "3.15.1"
+
+vscode-languageserver-types@3.15.1:
+  version "3.15.1"
+  resolved "https://registry.yarnpkg.com/vscode-languageserver-types/-/vscode-languageserver-types-3.15.1.tgz#17be71d78d2f6236d414f0001ce1ef4d23e6b6de"
+  integrity sha512-+a9MPUQrNGRrGU630OGbYVQ+11iOIovjCkqxajPa9w57Sd5ruK8WQNsslzpa0x/QJqC8kRc2DUxWjIFwoNm4ZQ==
+
 vscode-nls-dev@^3.3.1:
   version "3.3.1"
   resolved "https://registry.yarnpkg.com/vscode-nls-dev/-/vscode-nls-dev-3.3.1.tgz#15fc03e0c9ca5a150abb838690d9554ac06f77e4"
@@ -11335,13 +11345,6 @@ write@1.0.3:
   integrity sha512-/lg70HAjtkUgWPVZhZcm+T4hkL8Zbtp1nFNOn3lRrxnlv50SRBv7cR7RqR+GMsd3hUXy9hWBo4CHTbFTcOYwig==
   dependencies:
     mkdirp "^0.5.1"
-
-ws@^5.2.2:
-  version "5.2.3"
-  resolved "https://registry.yarnpkg.com/ws/-/ws-5.2.3.tgz#05541053414921bc29c63bee14b8b0dd50b07b3d"
-  integrity sha512-jZArVERrMsKUatIdnLzqvcfydI85dvd/Fp1u/VOpfdDWQ4c9qWXe+VIeAbQ5FrDwciAkr+lzofXLz3Kuf26AOA==
-  dependencies:
-    async-limiter "~1.0.0"
 
 ws@^7.2.0:
   version "7.4.6"

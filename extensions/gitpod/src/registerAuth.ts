@@ -15,20 +15,16 @@ import WebSocket = require('ws');
 import ReconnectingWebSocket from 'reconnecting-websocket';
 import { ConsoleLogger, listen as doListen } from 'vscode-ws-jsonrpc';
 
-
-// @ts-ignore
-import { DisposableStore } from '../../../src/vs/base/common/lifecycle';
-// @ts-ignore
-import { commands, create, ICommand, ICredentialsProvider, IHomeIndicator, ITunnel, ITunnelProvider, IWorkspace, IWorkspaceProvider } from '../../../src/vs/workbench/workbench.web.api';
-
 const authCompletePath = '/auth-complete';
 const baseURL = 'https://server-vscode-ouath2.staging.gitpod-dev.com';
 
 export const scopes: string[] = [
-	'function:accessCodeSyncStorage'
+	'function:accessCodeSyncStorage',
+	'resource:default',
+	'function:getGitpodTokenScopes',
 ];
 
-type UsedGitpodFunction = ['getWorkspace', 'openPort', 'stopWorkspace', 'setWorkspaceTimeout', 'getWorkspaceTimeout', 'getLoggedInUser', 'takeSnapshot', 'controlAdmission', 'sendHeartBeat', 'trackEvent'];
+type UsedGitpodFunction = ['getLoggedInUser', 'getGitpodTokenScopes'];
 type Union<Tuple extends any[], Union = never> = Tuple[number] | Union;
 export type GitpodConnection = Omit<GitpodServiceImpl<GitpodClient, GitpodServer>, 'server'> & {
 	server: Pick<GitpodServer, Union<UsedGitpodFunction>>
@@ -100,38 +96,47 @@ function generatePKCE(): { codeVerifier: string, codeChallenge: string } {
 	return { codeVerifier, codeChallenge };
 }
 
+
+/**
+ * Prompts the user to reload VS Code (executes native `workbench.action.reloadWindow`)
+*/
+function promptToReload(msg?: string): void {
+	const action = 'Reload';
+
+	vscode.window.showInformationMessage(msg || `Reload VS Code for new code sync configuration to take effect.`, action)
+		.then(selectedAction => {
+			if (selectedAction === action) {
+				vscode.commands.executeCommand('workbench.action.reloadWindow');
+			}
+		});
+}
+
 /**
  * Adds an authenthication provider as a possible provider for code sync.
  * It adds some key configuration to the user settings, so that the user can choose the Gitpod provider when deciding what to use with setting sync.
  * @returns a `DisposableStore`
  */
-export function addAuthProvider(): DisposableStore {
-	const subscriptions = new DisposableStore();
+export async function addAuthProviderToSettings(): Promise<void> {
 	const syncStoreURL = `${baseURL}/code-sync`;
-
-	subscriptions.add(create(document.body, {
-		productConfiguration: {
-			'configurationSync.store': {
-				url: syncStoreURL,
-				stableUrl: syncStoreURL,
-				insidersUrl: syncStoreURL,
-				canSwitch: true,
-				authenticationProviders: {
-					gitpod: {
-						scopes: ['function:accessCodeSyncStorage']
-					}
+	const config = vscode.workspace.getConfiguration();
+	try {
+		await config.update('configurationSync.store', {
+			url: syncStoreURL,
+			stableUrl: syncStoreURL,
+			insidersUrl: syncStoreURL,
+			canSwitch: true,
+			authenticationProviders: {
+				gitpod: {
+					scopes: ['function:accessCodeSyncStorage']
 				}
 			}
-		},
-		settingsSyncOptions: {
-			enabled: true,
-			enablementHandler: (_enablement: boolean) => {
-				// TODO(ft): add magic code here
-			}
-		},
-	}));
-	return subscriptions;
+		}, true);
+		promptToReload();
+	} catch (e) {
+		vscode.window.showErrorMessage(`Erorr setting up code sync config: ${e}`);
+	}
 }
+
 
 /**
  * Returns a promise that resolves with the current authentication session of the provided access token. This includes the token itself, the scopes, the user's ID and name.
@@ -174,6 +179,8 @@ export async function resolveAuthenticationSession(scopes: readonly string[], ac
 		return webSocket;
 	})();
 	const user = await gitpodService.server.getLoggedInUser();
+	const hash = crypto.createHash('sha256').update(accessToken, 'utf8').digest('hex');
+	gitpodService.server.getGitpodTokenScopes(hash);
 	(await pendignWebSocket).close();
 	return {
 		id: 'gitpod.user',
@@ -221,7 +228,15 @@ function registerAuth(context: vscode.ExtensionContext, logger: (value: string) 
 		logger('Creating session...');
 
 		const callbackUri = `${vscode.env.uriScheme}://gitpod.gitpod-desktop${authCompletePath}`;
+		const gitpodScopes = new Set<string>([
+			'function:accessCodeSyncStorage',
+			'resource:default'
+		]);
+		const gitpodFunctions: UsedGitpodFunction = ['getLoggedInUser', 'getGitpodTokenScopes'];
 
+		for (const gitpodFunction of gitpodFunctions) {
+			gitpodScopes.add('function:' + gitpodFunction);
+		}
 		const gitpodAuth = new ClientOAuth2({
 			clientId: 'vscode',
 			accessTokenUri: `${baseURL}/api/oauth/token`,
@@ -280,6 +295,7 @@ function registerAuth(context: vscode.ExtensionContext, logger: (value: string) 
 		},
 	}, { supportsMultipleAccounts: false }));
 	logger('Pushed auth');
+	addAuthProviderToSettings();
 	//#endregion gitpod auth
 }
 
