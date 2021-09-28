@@ -14,7 +14,7 @@ import { JsonRpcProxyFactory } from '@gitpod/gitpod-protocol/lib/messaging/proxy
 import WebSocket = require('ws');
 import ReconnectingWebSocket from 'reconnecting-websocket';
 import { ConsoleLogger, listen as doListen } from 'vscode-ws-jsonrpc';
-import { writeFileSync, readFileSync } from 'fs';
+import { writeFileSync, readFileSync, PathLike } from 'fs';
 
 const authCompletePath = '/auth-complete';
 const baseURL = 'https://server-vscode-ouath2.staging.gitpod-dev.com';
@@ -104,7 +104,7 @@ function generatePKCE(): { codeVerifier: string, codeChallenge: string } {
 export async function manuallyWriteConfig(syncStoreURL: string, remove?: boolean) {
 
 	const homedir = require('os').homedir();
-	let configFile;
+	let configFile: PathLike;
 
 	// TODO(ft): Add support for VS Code Insiders
 	if (process.platform === 'win32') {
