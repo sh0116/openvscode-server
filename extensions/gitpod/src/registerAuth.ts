@@ -8,21 +8,21 @@ import ClientOAuth2 from 'client-oauth2';
 import crypto from 'crypto';
 import * as vscode from 'vscode';
 import { URLSearchParams, URL } from 'url';
+const create = require('pkce').create;
 
 import { GitpodClient, GitpodServer, GitpodServiceImpl } from '@gitpod/gitpod-protocol/lib/gitpod-service';
 import { JsonRpcProxyFactory } from '@gitpod/gitpod-protocol/lib/messaging/proxy-factory';
 import WebSocket = require('ws');
 import ReconnectingWebSocket from 'reconnecting-websocket';
 import { ConsoleLogger, listen as doListen } from 'vscode-ws-jsonrpc';
-import { writeFileSync, readFileSync, PathLike } from 'fs';
 
 const authCompletePath = '/auth-complete';
 const baseURL = 'https://server-vscode-ouath2.staging.gitpod-dev.com';
 
 export const scopes: string[] = [
-	'function:accessCodeSyncStorage',
-	'resource:default',
 	'function:getGitpodTokenScopes',
+	'function:accessCodeSyncStorage',
+	'resource:default'
 ];
 
 type UsedGitpodFunction = ['getLoggedInUser', 'getGitpodTokenScopes'];
@@ -88,61 +88,6 @@ function promiseFromEvent<T, U>(
 }
 
 /**
-	Generates a code verifier and code challenge for the OAuth2 flow.
-	@returns a tuple of the code verifier and code challenge
-*/
-function generatePKCE(): { codeVerifier: string, codeChallenge: string } {
-	const codeVerifier = crypto.randomBytes(32).toString('base64');
-	const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64');
-	return { codeVerifier, codeChallenge };
-}
-
-/**
- * This is a workaround to change the config file although it fails via the native API
- * @param syncStoreURL the URL VS Code uses as an endpoint for sync
- */
-export async function manuallyWriteConfig(syncStoreURL: string, remove?: boolean) {
-
-	const homedir = require('os').homedir();
-	let configFile: PathLike;
-
-	// TODO(ft): Add support for VS Code Insiders
-	if (process.platform === 'win32') {
-		configFile = `${process.env.APPDATA}\\Code\\User\\settings.json`;
-	} else if (process.platform === 'darwin') {
-		configFile = `${homedir}/Library/Application Support/Code/User/settings.json`;
-	} else {
-		configFile = `${homedir}/.config/Code/User/settings.json`;
-	}
-
-	const settingsContents = readFileSync(configFile, 'utf8');
-
-	const jsonContents = JSON.parse(settingsContents);
-	if (remove) {
-		delete jsonContents['configurationSync.store'];
-	} else {
-		jsonContents['configurationSync.store'] = {
-			url: syncStoreURL,
-			stableUrl: syncStoreURL,
-			insidersUrl: syncStoreURL,
-			canSwitch: true,
-			authenticationProviders: {
-				gitpod: {
-					scopes: ['function:accessCodeSyncStorage']
-				}
-			}
-		};
-	}
-
-	try {
-		const data = JSON.stringify(jsonContents, null, 4);
-		writeFileSync(configFile, data, 'utf8');
-	} catch (err) {
-		vscode.window.showErrorMessage(`Error writing file: ${err}`);
-	}
-}
-
-/**
  * Prompts the user to reload VS Code (executes native `workbench.action.reloadWindow`)
 */
 function promptToReload(msg?: string): void {
@@ -177,7 +122,7 @@ export async function addAuthProviderToSettings(): Promise<void> {
 		}, true);
 		promptToReload();
 	} catch (e) {
-		vscode.window.showErrorMessage(`Erorr setting up code sync config: ${e}`);
+		vscode.window.showErrorMessage(`Error setting up code sync config: ${e}`);
 	}
 }
 
@@ -215,7 +160,6 @@ export async function resolveAuthenticationSession(scopes: readonly string[], ac
 		});
 		webSocket.onerror = console.error;
 		doListen({
-			// @ts-ignore
 			webSocket,
 			logger: new ConsoleLogger(),
 			onConnection: connection => factory.listen(connection),
@@ -271,7 +215,7 @@ function registerAuth(context: vscode.ExtensionContext, logger: (value: string) 
 	async function createSession(_scopes: string[]): Promise<vscode.AuthenticationSession> {
 		logger('Creating session...');
 
-		const callbackUri = `${vscode.env.uriScheme}://gitpod.gitpod-desktop${authCompletePath}`;
+		const callbackUri = `${vscode.env.uriScheme}://gitpod.gitpod-desktop/complete-gitpod-auth`;
 		const gitpodScopes = new Set<string>([
 			'function:accessCodeSyncStorage',
 			'resource:default'
@@ -282,7 +226,7 @@ function registerAuth(context: vscode.ExtensionContext, logger: (value: string) 
 			gitpodScopes.add('function:' + gitpodFunction);
 		}
 		const gitpodAuth = new ClientOAuth2({
-			clientId: 'vscode',
+			clientId: 'vscode+gitpod',
 			accessTokenUri: `${baseURL}/api/oauth/token`,
 			authorizationUri: `${baseURL}/api/oauth/authorize`,
 			redirectUri: callbackUri,
@@ -292,8 +236,8 @@ function registerAuth(context: vscode.ExtensionContext, logger: (value: string) 
 		const redirectUri = new URL(gitpodAuth.code.getUri());
 		const secureQuery = new URLSearchParams(redirectUri.search);
 
-		const codePair = generatePKCE();
-		secureQuery.set('code_challenge', codePair.codeChallenge);
+		const { codeChallenge }: { codeChallenge: string, codeVerifier: string } = create();
+		secureQuery.set('code_challenge', codeChallenge);
 		secureQuery.set('code_challenge_method', 'S256');
 
 		redirectUri.search = secureQuery.toString();
@@ -307,15 +251,11 @@ function registerAuth(context: vscode.ExtensionContext, logger: (value: string) 
 
 		// Open the authorization URL in the default browser
 		const authURI = vscode.Uri.parse(redirectUri.toString());
-		logger(`Opening browser at ${redirectUri.toString()}`);
+		logger(`Opening browser at ${authURI.toString()}`);
 		await vscode.env.openExternal(authURI);
-		// @ts-ignore
-		return Promise.race([timeoutPromise, waitForAuthenticationSession]);
+		return Promise.race([timeoutPromise, await waitForAuthenticationSession()]);
 	}
 
-	//#endregion
-
-	//#region gitpod auth
 	const onDidChangeSessionsEmitter = new vscode.EventEmitter<vscode.AuthenticationProviderAuthenticationSessionsChangeEvent>();
 	logger('Registering authentication provider...');
 	context.subscriptions.push(vscode.authentication.registerAuthenticationProvider('gitpod', 'Gitpod', {
@@ -340,7 +280,6 @@ function registerAuth(context: vscode.ExtensionContext, logger: (value: string) 
 	}, { supportsMultipleAccounts: false }));
 	logger('Pushed auth');
 	addAuthProviderToSettings();
-	//#endregion gitpod auth
 }
 
 export { authCompletePath, registerAuth };
