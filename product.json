@@ -1,8 +1,8 @@
 {
 	"nameShort": "OpenVSCode Server",
 	"nameLong": "OpenVSCode Server",
-	"applicationName": "opencode-server",
-	"dataFolderName": ".opencode-server",
+	"applicationName": "openvscode-server",
+	"dataFolderName": ".openvscode-server",
 	"win32MutexName": "opencodeserver",
 	"licenseName": "MIT",
 	"licenseUrl": "https://github.com/gitpod-io/vscode/blob/main/LICENSE.txt",
@@ -21,7 +21,7 @@
 	"linuxIconName": "opencode.server",
 	"licenseFileName": "LICENSE.txt",
 	"reportIssueUrl": "https://github.com/gitpod-io/gitpod/issues/new",
-	"urlProtocol": "opencode-server",
+	"urlProtocol": "openvscode-server",
 	"extensionAllowedProposedApi": [
 		"GitHub.vscode-pull-request-github-insiders",
 		"GitHub.vscode-pull-request-github",
